@@ -12,17 +12,46 @@ class FBBase(bpy.types.Operator):
         mod.use_bisect_axis[0] = True
         mod.use_clip = True
         
-        mod = context.active_object.modifiers.new(type="REMESH", name="FB.Remesh")
-        mod.octree_depth = 7
-        mod.mode = "SMOOTH"
-        mod.use_remove_disconnected = False
-
-        mod.use_smooth_shade = True
-        mod = context.active_object.modifiers.new(type="SMOOTH", name="FB.Smooth")
-        mod.factor = 1
-        mod.iterations = 5
+        smoothBevel(context.active_object.modifiers)
         return {'FINISHED'}
-        
+  
+
+def smoothBevel(modifiers) :
+    mod = modifiers.new(type="BEVEL", name="FB.Display.Mesh")
+    mod.limit_method = "ANGLE"
+    mod.segments = 3
+    modifiers.new(type="WEIGHTED_NORMAL", name="FB.Display.Smooth")
+
+def smoothVoxel(modifiers) :
+    mod = modifiers.new(type="REMESH", name="FB.Display.Mesh")
+    mod.octree_depth = 7
+    mod.mode = "SMOOTH"
+    mod.use_remove_disconnected = False
+    mod = modifiers.new(type="SMOOTH", name="FB.Display.Smooth")
+    mod.factor = 1
+    mod.iterations = 5
+
+class FBSmoothing(bpy.types.Operator):
+    """set smoothing type for object"""
+    bl_idname = "fb.smoothing"
+    bl_label = "Fast Bool: Smoothing"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        mods = context.active_object.modifiers;
+        isVox = False
+        for m in mods :
+            if m.name.startswith("FB.Display") :
+                if m.type == "REMESH":
+                    isVox = True
+                mods.remove(m)
+                
+        if isVox :
+            smoothBevel(mods)
+        else :
+            smoothVoxel(mods)
+                
+        return {'FINISHED'}
 
 class FBApply(bpy.types.Operator):
     """Add selected objects as booleans to active object"""
@@ -143,21 +172,29 @@ class FBPie(bpy.types.Menu):
     def draw(self, context):
         
         pie = self.layout.menu_pie()
-        op = pie.operator("fb.toggle", text="Toggle Chidren")
-        op = pie.operator("fb.base", text="Init")
-        op = pie.operator("fb.remove", text="Remove")
-        op = pie.operator("fb.commit", text="Commit")
-        op = pie.operator("fb.apply", text="Add")
+        
+        box = pie.split().box()
+        op = box.operator("fb.base", text="Initialize")
+        op = box.operator("fb.smoothing", text="Switch Smoothing")
+        op = box.operator("fb.toggle", text="Toggle Chidren")
+        op = box.operator("fb.commit", text="Bake Booleans")
+        
+        box = pie.split().box()
+        op = box.operator("fb.apply", text="Add")
         op.mode = 0
-        op = pie.operator("fb.apply", text="Subtract")
+        op = box.operator("fb.apply", text="Subtract")
         op.mode = 1
-        op = pie.operator("fb.apply", text="Intersect")
+        op = box.operator("fb.apply", text="Intersect")
         op.mode = 2
-        op = pie.operator("fb.apply", text="Split")
+        op = box.operator("fb.apply", text="Split")
         op.mode = 3
+        
+        op = pie.operator("fb.remove", text="Remove")
 
 
-FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie, FBToggle]
+
+
+FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie, FBToggle, FBSmoothing]
 
 def register():
     for FBClass in FBClasses :
