@@ -51,7 +51,8 @@ class FBApply(bpy.types.Operator):
         for other in selected:
             if other != active:
                 modName = "FB."+mode["Name"]+"."+other.name+"."+rand
-                other.display_type = "WIRE"
+                other.display_type = "BOUNDS"
+                other.hide_render = True
                 mod = active.modifiers.new(type = "BOOLEAN", name = modName)
                 mod.object = other
                 mod.operation = mode["Op"]
@@ -82,6 +83,7 @@ class FBRemove(bpy.types.Operator):
         
         for other in selected:
             other.display_type = "TEXTURED"
+            other.hide_render = False
             
             for omod in other.modifiers :
                 if omod.type == "SOLIDIFY" and omod.name.startswith("FB.") :
@@ -112,11 +114,28 @@ class FBCommit(bpy.types.Operator):
             for mod in object.modifiers :
                 if mod.type == "BOOLEAN" and mod.name.startswith("FB.") :
                     print("committing boolean modifier "+mod.name)
-                    bpy.ops.object.modifier_apply(apply_as='DATA', modifier=mod.name)
+                    bpy.ops.object.modifier_apply(modifier=mod.name)
 
                     
         return {'FINISHED'};
  
+
+class FBToggle(bpy.types.Operator):
+    """toggle visibility of children"""
+    bl_idname = "fb.toggle"
+    bl_label = "Fast Bool: Toggle Children Display"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        
+        selected = context.selected_objects
+        
+        for object in selected:
+            for child in object.children :
+                child.hide_viewport = not child.hide_viewport
+
+        return {'FINISHED'};
+        
 
 class FBPie(bpy.types.Menu):
     bl_label = "Fast Bool"
@@ -124,7 +143,8 @@ class FBPie(bpy.types.Menu):
     def draw(self, context):
         
         pie = self.layout.menu_pie()
-        op = pie.operator("fb.base", text="Mirrored Base")
+        op = pie.operator("fb.toggle", text="Toggle Chidren")
+        op = pie.operator("fb.base", text="Init")
         op = pie.operator("fb.remove", text="Remove")
         op = pie.operator("fb.commit", text="Commit")
         op = pie.operator("fb.apply", text="Add")
@@ -137,7 +157,7 @@ class FBPie(bpy.types.Menu):
         op.mode = 3
 
 
-FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie]
+FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie, FBToggle]
 
 def register():
     for FBClass in FBClasses :
@@ -155,3 +175,6 @@ if __name__ == "__main__":
 # bpy.ops.fb.base("INVOKE_DEFAULT")
 # bpy.ops.fb.apply("INVOKE_DEFAULT", mode=3)
 # bpy.ops.fb.remove("INVOKE_DEFAULT")
+
+# keybind this:
+# bpy.ops.wm.call_menu_pie("FBPie")
