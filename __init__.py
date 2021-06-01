@@ -1,3 +1,17 @@
+bl_info = {
+    "name": "Fast Bool",
+    "author": "Seth Trowbridge",
+    "version": (0, 0, 1),
+    "blender": (2, 90, 0),
+    "location": "Object Mode",
+    "revision": "1",
+    "description": "Modifier Management",
+    "warning": "",
+    "doc_url": "",
+    "tracker_url": "",
+    "category": "Mesh"
+}
+
 import bpy
 import random
 
@@ -19,6 +33,7 @@ class FBBase(bpy.types.Operator):
 def smoothBevel(modifiers) :
     mod = modifiers.new(type="BEVEL", name="FB.Display.Mesh")
     mod.limit_method = "ANGLE"
+    mod.miter_outer = "MITER_ARC"
     mod.segments = 3
     modifiers.new(type="WEIGHTED_NORMAL", name="FB.Display.Smooth")
 
