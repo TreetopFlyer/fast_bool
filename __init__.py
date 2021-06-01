@@ -1,3 +1,17 @@
+bl_info = {
+    "name": "Fast Bool",
+    "author": "Seth Trowbridge",
+    "version": (0, 0, 1),
+    "blender": (2, 90, 0),
+    "location": "Object Mode",
+    "revision": "1",
+    "description": "Modifier Management",
+    "warning": "",
+    "doc_url": "",
+    "tracker_url": "",
+    "category": "Mesh"
+}
+
 import bpy
 import random
 
@@ -12,17 +26,47 @@ class FBBase(bpy.types.Operator):
         mod.use_bisect_axis[0] = True
         mod.use_clip = True
         
-        mod = context.active_object.modifiers.new(type="REMESH", name="FB.Remesh")
-        mod.octree_depth = 7
-        mod.mode = "SMOOTH"
-        mod.use_remove_disconnected = False
-
-        mod.use_smooth_shade = True
-        mod = context.active_object.modifiers.new(type="SMOOTH", name="FB.Smooth")
-        mod.factor = 1
-        mod.iterations = 5
+        smoothBevel(context.active_object.modifiers)
         return {'FINISHED'}
-        
+  
+
+def smoothBevel(modifiers) :
+    mod = modifiers.new(type="BEVEL", name="FB.Display.Mesh")
+    mod.limit_method = "ANGLE"
+    mod.miter_outer = "MITER_ARC"
+    mod.segments = 3
+    modifiers.new(type="WEIGHTED_NORMAL", name="FB.Display.Smooth")
+
+def smoothVoxel(modifiers) :
+    mod = modifiers.new(type="REMESH", name="FB.Display.Mesh")
+    mod.octree_depth = 7
+    mod.mode = "SMOOTH"
+    mod.use_remove_disconnected = False
+    mod = modifiers.new(type="SMOOTH", name="FB.Display.Smooth")
+    mod.factor = 1
+    mod.iterations = 5
+
+class FBSmoothing(bpy.types.Operator):
+    """set smoothing type for object"""
+    bl_idname = "fb.smoothing"
+    bl_label = "Fast Bool: Smoothing"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        mods = context.active_object.modifiers;
+        isVox = False
+        for m in mods :
+            if m.name.startswith("FB.Display") :
+                if m.type == "REMESH":
+                    isVox = True
+                mods.remove(m)
+                
+        if isVox :
+            smoothBevel(mods)
+        else :
+            smoothVoxel(mods)
+                
+        return {'FINISHED'}
 
 class FBApply(bpy.types.Operator):
     """Add selected objects as booleans to active object"""
@@ -51,7 +95,8 @@ class FBApply(bpy.types.Operator):
         for other in selected:
             if other != active:
                 modName = "FB."+mode["Name"]+"."+other.name+"."+rand
-                other.display_type = "WIRE"
+                other.display_type = "BOUNDS"
+                other.hide_render = True
                 mod = active.modifiers.new(type = "BOOLEAN", name = modName)
                 mod.object = other
                 mod.operation = mode["Op"]
@@ -82,6 +127,7 @@ class FBRemove(bpy.types.Operator):
         
         for other in selected:
             other.display_type = "TEXTURED"
+            other.hide_render = False
             
             for omod in other.modifiers :
                 if omod.type == "SOLIDIFY" and omod.name.startswith("FB.") :
@@ -112,11 +158,28 @@ class FBCommit(bpy.types.Operator):
             for mod in object.modifiers :
                 if mod.type == "BOOLEAN" and mod.name.startswith("FB.") :
                     print("committing boolean modifier "+mod.name)
-                    bpy.ops.object.modifier_apply(apply_as='DATA', modifier=mod.name)
+                    bpy.ops.object.modifier_apply(modifier=mod.name)
 
                     
         return {'FINISHED'};
  
+
+class FBToggle(bpy.types.Operator):
+    """toggle visibility of children"""
+    bl_idname = "fb.toggle"
+    bl_label = "Fast Bool: Toggle Children Display"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    def execute(self, context):
+        
+        selected = context.selected_objects
+        
+        for object in selected:
+            for child in object.children :
+                child.hide_viewport = not child.hide_viewport
+
+        return {'FINISHED'};
+        
 
 class FBPie(bpy.types.Menu):
     bl_label = "Fast Bool"
@@ -124,20 +187,29 @@ class FBPie(bpy.types.Menu):
     def draw(self, context):
         
         pie = self.layout.menu_pie()
-        op = pie.operator("fb.base", text="Mirrored Base")
-        op = pie.operator("fb.remove", text="Remove")
-        op = pie.operator("fb.commit", text="Commit")
-        op = pie.operator("fb.apply", text="Add")
+        
+        box = pie.split().box()
+        op = box.operator("fb.base", text="Initialize")
+        op = box.operator("fb.smoothing", text="Switch Smoothing")
+        op = box.operator("fb.toggle", text="Toggle Chidren")
+        op = box.operator("fb.commit", text="Bake Booleans")
+        
+        box = pie.split().box()
+        op = box.operator("fb.apply", text="Add")
         op.mode = 0
-        op = pie.operator("fb.apply", text="Subtract")
+        op = box.operator("fb.apply", text="Subtract")
         op.mode = 1
-        op = pie.operator("fb.apply", text="Intersect")
+        op = box.operator("fb.apply", text="Intersect")
         op.mode = 2
-        op = pie.operator("fb.apply", text="Split")
+        op = box.operator("fb.apply", text="Split")
         op.mode = 3
+        
+        op = pie.operator("fb.remove", text="Remove")
 
 
-FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie]
+
+
+FBClasses = [FBBase, FBApply, FBRemove, FBCommit, FBPie, FBToggle, FBSmoothing]
 
 def register():
     for FBClass in FBClasses :
@@ -155,3 +227,6 @@ if __name__ == "__main__":
 # bpy.ops.fb.base("INVOKE_DEFAULT")
 # bpy.ops.fb.apply("INVOKE_DEFAULT", mode=3)
 # bpy.ops.fb.remove("INVOKE_DEFAULT")
+
+# keybind this:
+# bpy.ops.wm.call_menu_pie("FBPie")
